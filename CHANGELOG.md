@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The auto-reconnect daemon no longer stops discovery owned by another
   client.
+- The auto-reconnect daemon scans on its first pass after boot instead of
+  waiting for the scan interval to elapse on the monotonic clock.
 
 ## [0.1.0] - 2026-11-13
 
