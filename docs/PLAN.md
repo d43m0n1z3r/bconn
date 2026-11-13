@@ -667,7 +667,7 @@ page remain.
 - The fake is test-only and never touches the real Bluetooth stack.
 - No hardware, no root, and no real adapter are required.
 
-Current total: **68 tests**.
+Current total: **73 tests**.
 
 **Manual hardware matrix:**
 
@@ -719,7 +719,8 @@ app start with no adapter.
    disconnecting the previous audio device.
 7. **Packaging:** `sudo ./install.sh` is the supported install (apt packages,
    `/opt/bconn`, `/usr/local/bin` launchers, per-user desktop integration).
-   `.deb` and pipx packaging remain future work.
+   `.deb` packaging remains future work; pipx installs from the checkout are
+   supported.
 8. **Daemon IPC:** none. The daemon is a separate service that calls the same
    core directly; there is no custom D-Bus control interface.
 9. **Application shortcut:** generated per user by `bconn shortcut install`

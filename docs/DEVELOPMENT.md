@@ -296,5 +296,6 @@ bconn daemon logs -n 100
 6. Update `README.md`, `docs/INSTALL.md`, and `docs/PLAN.md` status if behavior
    changed.
 7. Check that the config and state paths still match the documentation.
-8. Tag the release and attach notes. `.deb` and pipx packaging are still future
-   work; the supported install is `sudo ./install.sh`.
+8. Tag the release and attach notes. `.deb` packaging is still future work; the
+   supported installs are `sudo ./install.sh` and
+   `pipx install --system-site-packages`.

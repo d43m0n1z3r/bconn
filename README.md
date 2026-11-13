@@ -3,6 +3,7 @@
 **A tray-first Bluetooth companion for Linux.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-d43m0n1z3r%2Fbconn-blue?logo=github)](https://github.com/d43m0n1z3r/bconn)
 
 BConn makes connecting Bluetooth earbuds, speakers, keyboards, and phones a
 one-click action instead of a `bluetoothctl` ritual. It lives in the system
@@ -61,7 +62,7 @@ desktop. No root required at runtime.
 
 ### The one-command install (recommended)
 
-Once the repository is published, this single command is the whole install:
+Install BConn with one command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/d43m0n1z3r/bconn/main/install.sh | sudo bash
@@ -294,7 +295,7 @@ Implemented and verified on real hardware:
 - GTK 3 tray app with scan window, preferences, details, notifications.
 - PipeWire audio routing.
 - Opt-in auto-reconnect daemon and application-menu shortcut.
-- **68** unit and fake-BlueZ end-to-end tests.
+- **73** unit and fake-BlueZ end-to-end tests.
 
 Planned:
 

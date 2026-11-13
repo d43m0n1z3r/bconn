@@ -1,6 +1,7 @@
 # Publishing BConn
 
-A short maintainer checklist for putting BConn on GitHub. Nothing here is
+A short maintainer checklist for publishing BConn releases on GitHub. The
+project is public at <https://github.com/d43m0n1z3r/bconn>. Nothing here is
 required to run BConn locally.
 
 ---
@@ -59,7 +60,7 @@ tray host or notification daemon; blocking failures must be fixed.
 ## 2. Create and push the repository
 
 ```bash
-cd /path/to/bt
+cd /path/to/bconn
 git init
 git add .
 git status                    # review what will be committed
@@ -141,11 +142,11 @@ First public release.
   notifications, and PipeWire audio routing.
 - Opt-in per-device auto-reconnect via a systemd --user daemon.
 - Application-menu shortcut and bundled icon.
-- 68 unit/integration tests against a fake BlueZ service.
+- 73 unit/integration tests against a fake BlueZ service.
 
 Known limitations:
-- Installation is one command (`sudo ./install.sh`); `.deb` and pipx packaging
-  are not ready yet.
+- Installation is one command (`sudo ./install.sh`); `.deb` packaging is not
+  ready yet. `pipx install --system-site-packages` also works.
 - Focused on Kali/XFCE and BlueZ 5.x; other desktops should work but are
   not verified.
 - Auto-connect is opt-in and does not override a manual disconnect.

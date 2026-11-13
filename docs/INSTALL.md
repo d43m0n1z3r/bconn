@@ -126,7 +126,7 @@ instead of reporting an error; the commands above fix both.
 
 ## 5. Install BConn (one command)
 
-Once the repository is published, this single command is the whole install:
+Install BConn with one command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/d43m0n1z3r/bconn/main/install.sh | sudo bash
@@ -239,7 +239,7 @@ pipx install --editable --system-site-packages ~/.local/opt/bconn
 `--system-site-packages` lets the app import the distribution's PyGObject
 (`gi`). Editable mode means edits in the checkout take effect immediately.
 
-### Add the checkout commands to `PATH`
+### Alternative: add the checkout commands to `PATH`
 
 ```bash
 # Zsh (the default on Kali)
@@ -360,6 +360,23 @@ Run the test suite after updating if you develop against the checkout:
 python3 -m unittest discover -s tests
 ```
 
+### Installed with `pipx`
+
+An editable pipx install already tracks the checkout, so pull and restart:
+
+```bash
+cd ~/.local/opt/bconn
+git pull --ff-only
+bconn daemon restart
+```
+
+For a non-editable pipx install, reinstall to pick up new code:
+
+```bash
+pipx reinstall bconn
+bconn daemon restart
+```
+
 ---
 
 ## 9. Uninstall
@@ -394,6 +411,16 @@ rm -rf ~/.config/bconn ~/.local/state/bconn   # optional: forget saved devices
 ```
 
 If you added the `PATH` line, remove it from `~/.bashrc` or `~/.zshrc`.
+
+For a pipx install:
+
+```bash
+bconn daemon uninstall        # stop + remove the user unit
+bconn shortcut uninstall      # remove the menu entry + icon
+pipx uninstall bconn
+```
+
+Your settings and state are kept unless you delete them as shown above.
 
 ---
 
@@ -556,16 +583,28 @@ rm -f ~/.local/state/bconn/state.json
 
 ### `bconn doctor` says the doctor script is missing
 
-This happens only in an unusual installation where `bin/bconn-doctor` is not
-next to the package. Run the project copy:
+This happens when `bin/bconn-doctor` is not next to the package, which is
+expected for a pipx install. Use the subcommand instead:
 
 ```bash
-./bin/bconn-doctor
+bconn doctor
 ```
 
-### Installing with pip or pipx
+From a checkout, run `./bin/bconn-doctor`.
 
-Not supported yet. BConn's GUI depends on the distribution's PyGObject
-(`python3-gi`), and `bin/bconn-doctor` is a shell script outside the Python
-package. Use the checkout installation above. Proper packaging is on the
-roadmap.
+### `pipx` install fails to import `gi`
+
+An isolated virtualenv cannot see the distribution's PyGObject. Install with
+system site packages:
+
+```bash
+pipx install --system-site-packages git+https://github.com/d43m0n1z3r/bconn.git
+```
+
+From a checkout, add `--editable` to track your working tree:
+
+```bash
+pipx install --editable --system-site-packages .
+```
+
+There is no PyPI release or `.deb` yet — use `pipx` or `sudo ./install.sh`.
