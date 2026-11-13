@@ -281,13 +281,34 @@ class ScanWindow(Gtk.ApplicationWindow):
                     lambda: app.start_scan(self),
                 )
         elif not devices:
-            self._show_message(
-                "system-search-symbolic",
-                "No matching devices",
-                "Try a different filter or search term.",
-                "Clear search",
-                self._clear_search,
-            )
+            query = self.search.get_text().strip()
+            if query:
+                self._show_message(
+                    "system-search-symbolic",
+                    "No matching devices",
+                    f"No device matches “{query}”.",
+                    "Clear search",
+                    self._clear_search,
+                )
+            elif self._filter != "all":
+                label = model.FILTER_LABELS[self._filter]
+                self._show_message(
+                    "system-search-symbolic",
+                    f"No {label} devices",
+                    f"None of the {len(app.devices)} known device(s) is a "
+                    f"{label} device. Put it in pairing mode and scan again, "
+                    "or show every device.",
+                    "Show all devices",
+                    self._show_all,
+                )
+            else:
+                self._show_message(
+                    "system-search-symbolic",
+                    "No matching devices",
+                    "Try a different filter or search term.",
+                    "Clear search",
+                    self._clear_search,
+                )
         else:
             self.stack.set_visible_child_name("list")
 
@@ -296,17 +317,30 @@ class ScanWindow(Gtk.ApplicationWindow):
     def _clear_search(self) -> None:
         self.search.set_text("")
 
+    def _show_all(self) -> None:
+        self.search.set_text("")
+        button = self._filter_buttons.get("all")
+        if button is not None and not button.get_active():
+            button.set_active(True)
+            return
+        self._filter = "all"
+        self.refresh_rows()
+
     def _footer_text(self, count: int) -> str:
         app = self.app
         adapter_name = (
             app.adapter.path.rsplit("/", 1)[-1] if app.adapter is not None else "—"
         )
+        total = len(app.devices)
+        shown = (
+            f"{count} of {total} device(s)" if count != total else f"{total} device(s)"
+        )
         if app.scanning:
             remaining = app.scan_remaining()
-            return f"{count} device(s) · {adapter_name} · scan ends in {remaining}s"
+            return f"{shown} · {adapter_name} · scan ends in {remaining}s"
         connected = sum(1 for device in app.devices if device.connected)
         return (
-            f"{count} device(s) · {adapter_name} · "
+            f"{shown} · {adapter_name} · "
             f"{connected} connected · scan with Space"
         )
 
@@ -361,8 +395,9 @@ class ScanWindow(Gtk.ApplicationWindow):
         name.set_max_width_chars(38)
         text.pack_start(name, False, False, 0)
         meta_parts = [device.address]
-        if device.kind != "other":
-            meta_parts.append(device.kind)
+        subtype = getattr(device, "subtype", "") or device.kind
+        if subtype and subtype != "other":
+            meta_parts.append(subtype)
         if device.connected and device.battery is not None:
             meta_parts.append(f"{device.battery}%")
         if device.rssi is not None:
@@ -446,6 +481,12 @@ class ScanWindow(Gtk.ApplicationWindow):
         menu.append(route)
 
         menu.append(Gtk.SeparatorMenuItem())
+
+        if device.supports_file_transfer:
+            send = Gtk.MenuItem(label="Send file…")
+            send.connect("activate", lambda *_: self.app.send_files(device, self))
+            menu.append(send)
+            menu.append(Gtk.SeparatorMenuItem())
 
         forget = Gtk.MenuItem(label="Forget device…")
         forget.connect("activate", lambda *_: self.app.confirm_forget(device, self))

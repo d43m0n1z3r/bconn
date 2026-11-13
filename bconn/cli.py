@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from . import __version__, audio, bluez, transaction
+from . import __version__, audio, bluez, obex, transaction
 from .agent import Prompter
 from .config import Config, State
 from .errors import (
@@ -423,6 +423,59 @@ def cmd_connect(args: argparse.Namespace) -> int:
         ctx.conn, ctx.adapter, device, _prompter(args)
     )
     _report_connect(ctx, result)
+    return 0
+
+
+def cmd_send(args: argparse.Namespace) -> int:
+    ctx = _context(args, require_adapter=True)
+    device = _resolve(ctx, args.device)
+    assert ctx.adapter is not None
+    transaction.ensure_adapter_powered(ctx.conn, ctx.adapter)
+
+    if not device.paired:
+        print(f"Pairing with {device.display_name} ({device.address})…")
+        paired_now, warnings = transaction.pair_device(
+            ctx.conn, ctx.adapter, device, _prompter(args)
+        )
+        for warning in warnings:
+            print(f"warning: {warning}", file=sys.stderr)
+        if paired_now:
+            print("Paired ✓")
+
+    files = [Path(path).expanduser() for path in args.files]
+    print(
+        f"Sending {len(files)} file(s) to {device.display_name} "
+        f"({device.address}) over OBEX…"
+    )
+
+    last_percent: dict[str, int] = {}
+
+    def progress(source: Path, transferred: int, size: int) -> None:
+        if not sys.stderr.isatty() or size <= 0:
+            return
+        percent = int(transferred * 100 / size)
+        step = percent // 10 * 10
+        if step <= last_percent.get(source.name, -1) and percent < 100:
+            return
+        last_percent[source.name] = step
+        print(
+            f"  {source.name}: {percent}%",
+            file=sys.stderr,
+            end="\r",
+        )
+        if percent >= 100:
+            print(" " * 60, file=sys.stderr, end="\r")
+
+    timeout = float(args.timeout or 120)
+    results = obex.send_files(
+        device.address,
+        files,
+        timeout=timeout,
+        progress=progress,
+    )
+    for result in results:
+        print(f"  ✓ {result.filename.name} ({result.transferred} bytes)")
+    print("Sent ✓")
     return 0
 
 
@@ -867,6 +920,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_disconnect = add("disconnect", cmd_disconnect, "disconnect a device")
     p_disconnect.add_argument("device", help="device name, alias, or MAC address")
+
+    p_send = add(
+        "send",
+        cmd_send,
+        "send files to a device over OBEX Object Push",
+        aliases=["push"],
+    )
+    p_send.add_argument("device", help="device name, alias, or MAC address")
+    p_send.add_argument("files", nargs="+", help="file paths to send")
+    p_send.add_argument(
+        "--yes", action="store_true", help="auto-accept pairing confirmations"
+    )
+    p_send.add_argument(
+        "--timeout", type=float, help="seconds to wait per file (default: 120)"
+    )
 
     p_forget = add("forget", cmd_forget, "remove a pairing and its saved settings")
     p_forget.add_argument("device", help="device name, alias, or MAC address")

@@ -7,6 +7,7 @@ import signal
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import gi
 
@@ -15,7 +16,7 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Gio", "2.0")
 from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from .. import audio, bluez, transaction  # noqa: E402
+from .. import audio, bluez, obex, transaction  # noqa: E402
 from ..config import Config, State  # noqa: E402
 from ..errors import BconnError, SystemNotReady  # noqa: E402
 from . import icons, model  # noqa: E402
@@ -395,6 +396,10 @@ class BconnApplication(Gtk.Application):
         disconnect = self._item("Disconnect")
         disconnect.connect("activate", lambda *_: self.disconnect_device(device))
         submenu.append(disconnect)
+        if device.supports_file_transfer:
+            send = self._item("Send file…")
+            send.connect("activate", lambda *_: self.send_files(device))
+            submenu.append(send)
         submenu.append(Gtk.SeparatorMenuItem())
         forget = self._item("Forget device…")
         forget.connect("activate", lambda *_: self.confirm_forget(device))
@@ -702,6 +707,113 @@ class BconnApplication(Gtk.Application):
         finally:
             self._end()
             self.refresh_now()
+
+    def send_files(self, device, parent: Gtk.Window | None = None) -> None:
+        """Ask for files and send them over OBEX Object Push."""
+        if self.busy:
+            return
+        dialog = Gtk.FileChooserDialog(
+            title=f"Send file to {device.display_name}",
+            transient_for=parent or self._active_window(),
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons(
+            "Cancel",
+            Gtk.ResponseType.CANCEL,
+            "Send",
+            Gtk.ResponseType.ACCEPT,
+        )
+        dialog.set_select_multiple(True)
+        all_files = Gtk.FileFilter()
+        all_files.set_name("All files")
+        all_files.add_pattern("*")
+        dialog.add_filter(all_files)
+        dialog.connect("response", self._on_send_response, device)
+        dialog.show()
+
+    def _on_send_response(self, dialog: Gtk.FileChooserDialog, response: int, device) -> None:
+        paths = list(dialog.get_filenames())
+        dialog.destroy()
+        if response != Gtk.ResponseType.ACCEPT or not paths:
+            return
+        self._start_send(device, paths)
+
+    def _start_send(self, device, paths: list[str]) -> None:
+        if self.busy:
+            return
+        if self.scanning:
+            self.stop_scan()
+        if not self._begin(device):
+            return
+        try:
+            self._refresh_data()
+            if self.adapter is None:
+                raise SystemNotReady("No Bluetooth adapter was found.")
+            current = next(
+                (item for item in self.devices if item.address == device.address),
+                device,
+            )
+            transaction.ensure_adapter_powered(self.conn, self.adapter)
+            if not current.paired:
+                prompter = GtkPrompter(self._active_window(), self.notifier)
+                transaction.pair_device(self.conn, self.adapter, current, prompter)
+                self._refresh_data()
+                current = next(
+                    (item for item in self.devices if item.address == device.address),
+                    current,
+                )
+        except BconnError as error:
+            self._fail(error)
+            self._end()
+            return
+
+        def worker() -> None:
+            result = None
+            error = None
+            try:
+                result = obex.send_files(
+                    current.address,
+                    paths,
+                    progress=self._send_progress,
+                )
+            except BconnError as exc:
+                error = exc
+            except Exception as exc:  # keep the UI usable on unexpected failures
+                error = BconnError(
+                    "The file transfer failed.",
+                    str(exc) or "Check the device and try again.",
+                )
+            GLib.idle_add(self._send_done, current, paths, result, error)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _send_progress(self, source: Path, transferred: int, size: int) -> None:
+        GLib.idle_add(self._send_progress_ui, source, transferred, size)
+
+    def _send_progress_ui(self, source: Path, transferred: int, size: int) -> bool:
+        if self.window is None:
+            return False
+        if size > 0:
+            percent = int(transferred * 100 / size)
+            self.window.set_footer(f"Sending {source.name}… {percent}%")
+        else:
+            self.window.set_footer(f"Sending {source.name}…")
+        return False
+
+    def _send_done(self, device, paths: list[str], result, error) -> bool:
+        if error is not None:
+            self._fail(error)
+        else:
+            count = len(result or paths)
+            noun = "file" if count == 1 else "files"
+            self._clear_error()
+            self.notifier.success(
+                f"Sent {count} {noun} to {device.display_name}",
+                Path(paths[0]).name if count == 1 else "",
+            )
+        self._end()
+        self.refresh_now()
+        return False
 
     def _enforce_one_audio(self, target) -> None:
         for device in self.devices:

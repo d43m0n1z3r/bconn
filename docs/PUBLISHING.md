@@ -1,7 +1,6 @@
 # Publishing BConn
 
-A short maintainer checklist for publishing BConn releases on GitHub. The
-project is public at <https://github.com/d43m0n1z3r/bconn>. Nothing here is
+A short maintainer checklist for putting BConn on GitHub. Nothing here is
 required to run BConn locally.
 
 ---

@@ -9,12 +9,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
-FILTERS: tuple[str, ...] = ("all", "audio", "input", "phone")
+FILTERS: tuple[str, ...] = ("all", "audio", "input", "phone", "other")
 FILTER_LABELS: dict[str, str] = {
     "all": "All",
     "audio": "Audio",
     "input": "Input",
     "phone": "Phone",
+    "other": "Other",
 }
 
 TRAY_STATES = ("off", "ready", "connected", "scanning", "attention", "error")
@@ -180,6 +181,25 @@ def action_label(device: Any) -> str:
 
 
 def device_icon(device: Any) -> str:
+    subtype = (getattr(device, "subtype", "") or "").lower()
+    kind = getattr(device, "kind", "other")
+    if subtype == "tablet":
+        return "input-tablet" if kind == "input" else "computer"
+    if subtype == "watch":
+        return "preferences-system-time"
+    if subtype in {"camera", "camcorder", "video camera"}:
+        return "camera-photo"
+    if subtype == "printer":
+        return "printer"
+    if subtype == "scanner":
+        return "scanner"
+    if subtype == "display":
+        return "video-display"
+    if subtype in {"laptop", "desktop", "server"}:
+        return "computer"
+    if subtype == "smartphone":
+        return "phone"
+
     icon = (getattr(device, "icon", "") or "").lower()
     if icon.startswith("audio-speakers"):
         return "audio-speakers"
@@ -197,12 +217,17 @@ def device_icon(device: Any) -> str:
         return "phone"
     if icon.startswith(("computer", "laptop")):
         return "computer"
+    if icon.startswith(("scanner", "camera")):
+        return "scanner"
     kind = getattr(device, "kind", "other")
     return {
         "audio": "audio-headphones",
         "input": "input-keyboard",
         "phone": "phone",
         "computer": "computer",
+        "imaging": "scanner",
+        "wearable": "preferences-system-time",
+        "network": "network-wired",
     }.get(kind, "bluetooth")
 
 

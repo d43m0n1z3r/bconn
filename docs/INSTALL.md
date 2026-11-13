@@ -41,7 +41,7 @@ sudo apt install -y \
   gir1.2-gtk-3.0 \
   gir1.2-notify-0.7 \
   gir1.2-ayatanaappindicator3-0.1 \
-  bluez rfkill \
+  bluez rfkill bluez-obexd \
   pipewire-bin wireplumber \
   desktop-file-utils
 ```
@@ -55,9 +55,17 @@ What each group does:
 | `gir1.2-notify-0.7` | Desktop notifications |
 | `gir1.2-ayatanaappindicator3-0.1` | Tray icon (`AyatanaAppIndicator3`) |
 | `bluez` | `bluetoothd`, `bluetoothctl`, D-Bus API |
+| `bluez-obexd` | OBEX Object Push file transfer (`bconn send`, "Send file…") |
 | `rfkill` | Radio block detection |
 | `pipewire-bin`, `wireplumber` | `pw-dump`, `wpctl`, audio routing |
 | `desktop-file-utils` | Refreshes the application-menu cache (optional) |
+
+File transfer uses `obexd` on your **user** session bus. It is D-Bus activated
+by `bluez-obexd`; if it is not running, start it with:
+
+```bash
+systemctl --user start obex.service
+```
 
 Optional desktop helpers:
 
@@ -82,6 +90,7 @@ Package names vary. The same components are needed.
 | libnotify | `libnotify` | `libnotify` |
 | Ayatana AppIndicator | `libayatana-appindicator` | `libayatana-appindicator-gtk3` |
 | BlueZ | `bluez` | `bluez` |
+| OBEX file transfer | `bluez-obex` | `bluez-obexd` |
 | rfkill | `util-linux` | `util-linux` |
 | PipeWire | `pipewire` | `pipewire` |
 | WirePlumber | `wireplumber` | `wireplumber` |

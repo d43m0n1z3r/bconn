@@ -34,8 +34,9 @@ desktop. No root required at runtime.
 |---|---|
 | Connection | Pair → trust → connect as one verified transaction, with discovery stopped first |
 | Pairing | Real BlueZ agent: confirmation, passkey, PIN, display, authorization |
-| CLI | `list`, `scan`, `pair`, `connect`, `disconnect`, `forget`, `power`, `audio`, `auto`, `info`, `doctor`, `daemon`, `shortcut` |
+| CLI | `list`, `scan`, `pair`, `connect`, `disconnect`, `send`, `forget`, `power`, `audio`, `auto`, `info`, `doctor`, `daemon`, `shortcut` |
 | GUI | Tray menu, scan window, search/filter, per-device menus, details, preferences |
+| File transfer | OBEX Object Push (`bconn send`, tray and row-menu "Send file…"), with pairing on demand |
 | Auto-reconnect | Opt-in per device, 30s poll, exponential backoff (15s → 300s), one-shot failure notice |
 | Audio | PipeWire sink discovery via `pw-dump` and default routing via `wpctl` |
 | Desktop | Application-menu shortcut with a bundled icon |
@@ -51,6 +52,7 @@ desktop. No root required at runtime.
 | libnotify bindings | Notifications | `gir1.2-notify-0.7` |
 | Ayatana AppIndicator | Tray icon | `gir1.2-ayatanaappindicator3-0.1` |
 | BlueZ | Bluetooth stack | `bluez` |
+| OBEX daemon | File transfer | `bluez-obexd` |
 | rfkill | Radio check | `rfkill` |
 | PipeWire + WirePlumber | Audio routing | `pipewire-bin`, `wireplumber` |
 | desktop-file-utils | Menu cache refresh (optional) | `desktop-file-utils` |
@@ -115,7 +117,7 @@ sudo apt install -y \
   gir1.2-gtk-3.0 \
   gir1.2-notify-0.7 \
   gir1.2-ayatanaappindicator3-0.1 \
-  bluez rfkill \
+  bluez rfkill bluez-obexd \
   pipewire-bin wireplumber \
   desktop-file-utils
 
@@ -157,6 +159,7 @@ bconn scan                     # discover nearby devices (time-boxed)
 bconn pair buds --connect      # pair, trust, connect, route audio
 bconn connect buds             # connect a name, alias, or MAC
 bconn disconnect buds          # manual disconnect; pauses auto-reconnect
+bconn send buds photo.jpg      # send files over OBEX Object Push
 bconn audio                    # list sinks / choose the default output
 bconn auto buds on             # opt in to auto-reconnect
 bconn info buds                # addresses, UUIDs, battery, state
@@ -245,6 +248,7 @@ bconn doctor
 | Adapter present but powered off | `bluetoothctl power on` (BConn does this automatically too) |
 | No tray icon | Install a StatusNotifier host, or run `bconn gui --window` |
 | Connected but audio stays on speakers | `wpctl status`, then `bconn audio <sink-id\|name\|mac>` |
+| "Send file…" missing or OBEX fails | Ensure `bluez-obexd` is installed and `systemctl --user start obex.service` is running |
 | Daemon does not reconnect | Check `bconn auto <device>`, then `journalctl --user-unit bconn-daemon -n 50` |
 | Pairing prompt never appears | Another agent (Blueman) may own the default agent; quit it and retry |
 
@@ -295,17 +299,23 @@ Implemented and verified on real hardware:
 - GTK 3 tray app with scan window, preferences, details, notifications.
 - PipeWire audio routing.
 - Opt-in auto-reconnect daemon and application-menu shortcut.
-- **73** unit and fake-BlueZ end-to-end tests.
+- Device classification from BlueZ icons, UUIDs, and Class of Device major/minor
+  classes (phone, tablet, laptop, desktop, watch, input, imaging, wearable),
+  with Audio/Input/Phone/Other filters (verified on real hardware).
+- OBEX Object Push file sending from the CLI and tray (mocked-D-Bus tests plus
+  a hardware smoke test against `obexd`).
+- **112** unit and fake-BlueZ end-to-end tests.
 
 Planned:
 
+- Receiving files from phones (discoverable/pairable toggles).
 - AVRCP media controls and battery in the tray.
 - Audio profile selection (A2DP vs HFP).
 - Multiple adapters, BLE details.
 - `.deb` package, autostart entry, man page.
 
-Non-goals: replacing Blueman's OBEX/PAN features, managing Wi-Fi/NFC, running
-as root, or supporting non-Linux platforms.
+Non-goals: replacing Blueman's PAN/network features, managing Wi-Fi/NFC,
+running as root, or supporting non-Linux platforms.
 
 ## License
 

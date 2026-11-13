@@ -35,8 +35,102 @@ MANAGED_OBJECTS_TYPE = GLib.VariantType.new("(a{oa{sa{sv}}})")
 
 _AUDIO_ICONS = ("audio-card", "audio-headphones", "audio-headset", "audio-speakers")
 _INPUT_ICONS = ("input-keyboard", "input-mouse", "input-gaming", "input-tablet")
+_PHONE_ICONS = ("phone", "smartphone")
 _AUDIO_UUIDS = ("110A", "110B", "1108", "110E", "111E", "111F", "112D", "112E")
 _INPUT_UUIDS = ("1124", "1812")
+_PHONE_UUIDS = ("112F", "1132")  # PBAP server and MAP server roles
+_OBEX_UUIDS = ("1105", "1106")  # Object Push and File Transfer
+
+# Bluetooth Class of Device major device classes (bits 8-12).
+_MAJOR_COMPUTER = 0x01
+_MAJOR_PHONE = 0x02
+_MAJOR_NETWORK = 0x03
+_MAJOR_AUDIO = 0x04
+_MAJOR_PERIPHERAL = 0x05
+_MAJOR_IMAGING = 0x06
+_MAJOR_WEARABLE = 0x07
+_MAJOR_TOY = 0x08
+_MAJOR_HEALTH = 0x09
+
+_MAJOR_KINDS = {
+    _MAJOR_COMPUTER: "computer",
+    _MAJOR_PHONE: "phone",
+    _MAJOR_NETWORK: "network",
+    _MAJOR_IMAGING: "imaging",
+    _MAJOR_WEARABLE: "wearable",
+    _MAJOR_TOY: "other",
+    _MAJOR_HEALTH: "other",
+}
+
+# Minor device class values (bits 2-7 of the Class of Device).
+_COMPUTER_SUBTYPES = {
+    0x01: "desktop",
+    0x02: "server",
+    0x03: "laptop",
+    0x04: "handheld",
+    0x05: "pda",
+    0x06: "wearable computer",
+    0x07: "tablet",
+}
+_PHONE_SUBTYPES = {
+    0x01: "cellular phone",
+    0x02: "cordless phone",
+    0x03: "smartphone",
+    0x04: "modem",
+}
+_AUDIO_SUBTYPES = {
+    0x01: "headset",
+    0x02: "hands-free",
+    0x04: "microphone",
+    0x05: "loudspeaker",
+    0x06: "headphones",
+    0x07: "portable audio",
+    0x08: "car audio",
+    0x09: "set-top box",
+    0x0A: "hifi",
+    0x0B: "vcr",
+    0x0C: "video camera",
+    0x0D: "camcorder",
+    0x0E: "video monitor",
+    0x0F: "video display",
+    0x10: "video conferencing",
+    0x12: "gaming audio",
+}
+_PERIPHERAL_SUBTYPES = {
+    0x01: "joystick",
+    0x02: "gamepad",
+    0x03: "remote",
+    0x04: "sensor",
+    0x05: "drawing tablet",
+    0x06: "card reader",
+    0x07: "pen",
+    0x08: "barcode scanner",
+    0x09: "gesture input",
+}
+_WEARABLE_SUBTYPES = {
+    0x01: "watch",
+    0x02: "pager",
+    0x03: "jacket",
+    0x04: "helmet",
+    0x05: "glasses",
+}
+_TOY_SUBTYPES = {
+    0x01: "robot",
+    0x02: "vehicle",
+    0x03: "doll",
+    0x04: "controller",
+    0x05: "game",
+}
+_HEALTH_SUBTYPES = {
+    0x01: "blood pressure monitor",
+    0x02: "thermometer",
+    0x03: "scale",
+    0x04: "glucose meter",
+    0x05: "pulse oximeter",
+    0x06: "heart rate monitor",
+    0x07: "health data",
+    0x08: "step counter",
+}
 
 
 @dataclass
@@ -62,6 +156,7 @@ class Device:
     address: str
     adapter_path: str = ""
     address_type: str = "public"
+    device_class: int = 0
     name: str = ""
     alias: str = ""
     icon: str = ""
@@ -79,34 +174,142 @@ class Device:
     def display_name(self) -> str:
         return self.alias or self.name or self.address
 
+    def has_uuid(self, *short_uuids: str) -> bool:
+        """Match 16-bit UUIDs such as ``1105`` against the full UUID list."""
+        prefixes = tuple(f"0000{uuid.lower()}" for uuid in short_uuids)
+        return any(u.lower().startswith(prefixes) for u in self.uuids)
+
+    @property
+    def major_class(self) -> int:
+        """Bluetooth Class of Device major class (bits 8-12)."""
+        return (self.device_class >> 8) & 0x1F
+
+    @property
+    def minor_class(self) -> int:
+        """Bluetooth Class of Device minor class (bits 2-7)."""
+        return (self.device_class >> 2) & 0x3F
+
+    @property
+    def subtype(self) -> str:
+        """Human-readable device subtype from the Class of Device or icon."""
+        icon = (self.icon or "").lower()
+        if icon.startswith("tablet"):
+            return "tablet"
+        if self.is_phone:
+            return _PHONE_SUBTYPES.get(self.minor_class, "phone")
+
+        major = self.major_class
+        minor = self.minor_class
+        if major == _MAJOR_COMPUTER:
+            return _COMPUTER_SUBTYPES.get(minor, "computer")
+        if major == _MAJOR_AUDIO:
+            return _AUDIO_SUBTYPES.get(minor, "audio")
+        if major == _MAJOR_PERIPHERAL:
+            category = minor & 0x30
+            if category == 0x10:
+                return "keyboard"
+            if category == 0x20:
+                return "mouse"
+            if category == 0x30:
+                return "keyboard"
+            return _PERIPHERAL_SUBTYPES.get(minor & 0x0F, "input")
+        if major == _MAJOR_WEARABLE:
+            return _WEARABLE_SUBTYPES.get(minor, "wearable")
+        if major == _MAJOR_IMAGING:
+            # Imaging minor classes are a bitmask and may be combined.
+            names = []
+            if minor & 0x04:
+                names.append("display")
+            if minor & 0x08:
+                names.append("camera")
+            if minor & 0x10:
+                names.append("scanner")
+            if minor & 0x20:
+                names.append("printer")
+            return ", ".join(names) or "imaging"
+        if major == _MAJOR_NETWORK:
+            return "network"
+        if major == _MAJOR_TOY:
+            return _TOY_SUBTYPES.get(minor, "toy")
+        if major == _MAJOR_HEALTH:
+            return _HEALTH_SUBTYPES.get(minor, "health")
+
+        if icon.startswith("watch"):
+            return "watch"
+        if icon.startswith("camera"):
+            return "camera"
+        if icon.startswith("printer"):
+            return "printer"
+        if icon.startswith("scanner"):
+            return "scanner"
+        if icon.startswith("video-display"):
+            return "display"
+        if icon.startswith("multimedia-player"):
+            return "media player"
+        return self.kind
+
+    @property
+    def is_phone(self) -> bool:
+        """Phones also advertise A2DP/HFP profiles, so check this before audio."""
+        icon = (self.icon or "").lower()
+        if icon.startswith(_PHONE_ICONS):
+            return True
+        if self.major_class == _MAJOR_PHONE:
+            return True
+        # PBAP/MAP server roles are strong phone indicators even without an icon.
+        return self.has_uuid(*_PHONE_UUIDS)
+
     @property
     def is_audio(self) -> bool:
+        if self.is_phone:
+            return False
         icon = (self.icon or "").lower()
         if icon.startswith(_AUDIO_ICONS):
             return True
-        prefixes = tuple(f"0000{uuid.lower()}" for uuid in _AUDIO_UUIDS)
-        return any(u.lower().startswith(prefixes) for u in self.uuids)
+        if self.has_uuid(*_AUDIO_UUIDS):
+            return True
+        return self.major_class == _MAJOR_AUDIO
 
     @property
     def is_input(self) -> bool:
         icon = (self.icon or "").lower()
         if icon.startswith(_INPUT_ICONS):
             return True
-        prefixes = tuple(f"0000{uuid.lower()}" for uuid in _INPUT_UUIDS)
-        return any(u.lower().startswith(prefixes) for u in self.uuids)
+        if self.has_uuid(*_INPUT_UUIDS):
+            return True
+        return self.major_class == _MAJOR_PERIPHERAL
+
+    @property
+    def supports_file_transfer(self) -> bool:
+        """Whether an OBEX Object Push attempt makes sense for this device."""
+        if self.is_input:
+            return False
+        if self.has_uuid(*_OBEX_UUIDS):
+            return True
+        if self.kind == "other":
+            # Unknown devices only get the action once they are trusted;
+            # otherwise every BLE beacon in range would offer a transfer.
+            return self.paired or self.trusted
+        return self.kind in {
+            "phone",
+            "computer",
+            "network",
+            "imaging",
+            "wearable",
+        }
 
     @property
     def kind(self) -> str:
+        if self.is_phone:
+            return "phone"
         if self.is_audio:
             return "audio"
         if self.is_input:
             return "input"
         icon = (self.icon or "").lower()
-        if icon.startswith("phone"):
-            return "phone"
         if icon.startswith(("computer", "laptop")):
             return "computer"
-        return "other"
+        return _MAJOR_KINDS.get(self.major_class, "other")
 
     @property
     def state(self) -> str:
@@ -252,6 +455,7 @@ def parse_objects(objects: dict[str, Any]) -> tuple[list[Adapter], list[Device]]
                     address=str(props.get("Address", "")),
                     adapter_path=str(props.get("Adapter", "") or ""),
                     address_type=str(props.get("AddressType", "public") or "public"),
+                    device_class=int(props.get("Class", 0) or 0),
                     name=str(props.get("Name", "") or ""),
                     alias=str(props.get("Alias", "") or ""),
                     icon=str(props.get("Icon", "") or ""),

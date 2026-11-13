@@ -3,8 +3,10 @@
 > Name: **BConn**. CLI: `bconn`. Config: `~/.config/bconn/`.
 > Target: Kali Linux 2026.3, XFCE, X11, BlueZ 5.87, PipeWire/WirePlumber.
 >
-> **Status:** phases 1–3 are implemented and verified on real hardware. This
-> document keeps the original design, the reliability rules, and the roadmap.
+> **Status:** phases 1–3 are implemented and verified on real hardware. OBEX
+> Object Push is implemented and covered by mocked-D-Bus tests, with a
+> hardware smoke test against `obexd`. This document keeps the original
+> design, the reliability rules, and the roadmap.
 > For installation see [`INSTALL.md`](INSTALL.md); for the codebase, tests, and
 > extension points see [`DEVELOPMENT.md`](DEVELOPMENT.md); for the user-facing
 > overview see the [README](../README.md).
@@ -31,7 +33,7 @@ does not want to "pair a remote device and attach an A2DP profile"; they want
 
 **Non-goals:**
 
-- Full Blueman replacement (OBEX, PAN, network tethering).
+- Full Blueman replacement (PAN, network tethering).
 - Wi-Fi/NFC/other radios.
 - Kernel modules, custom firmware, or running as root.
 - Cross-platform support. Linux/BlueZ only.
@@ -142,6 +144,7 @@ bconn scan [--timeout 10]          # nearby devices
 bconn pair <name|mac> [--connect]
 bconn connect <name|mac>
 bconn disconnect <name|mac>
+bconn send <name|mac> <file...>   # OBEX Object Push
 bconn forget <name|mac> [--yes]
 bconn power [on|off|toggle]
 bconn audio [sink]                 # list/choose the default output
@@ -185,7 +188,25 @@ short scan first, then resolve again.
 - Future: logind `PrepareForSleep` resume hook (the poll loop already covers
   the common case within one 30s cycle).
 
-### 4.4 Later
+### 4.4 OBEX Object Push (done)
+
+- Device classification uses BlueZ `Icon`, service UUIDs, and the Bluetooth
+  Class of Device major and minor classes, so phones, tablets, laptops,
+  desktops, watches, input devices, imaging devices, and wearables are all
+  recognised. Phones that also advertise A2DP/HFP audio profiles are still
+  classified as phones. The scan window has Audio, Input, Phone, and Other
+  filters.
+- `bconn send <device> <file...>` and the tray/row-menu **Send file…** action
+  send files with `org.bluez.obex` Object Push. BConn pairs on demand, creates
+  one OPP session per batch, reports progress, and removes the session.
+- `obexd` is a per-user service on the session bus. Missing it produces a
+  specific error with `systemctl --user start obex.service`.
+- The auto-reconnect daemon skips its own scan while another client owns
+  discovery, so it cannot cut a GUI scan short.
+- Receiving files (discoverable/pairable toggles), PBAP, and PAN remain out of
+  scope for now.
+
+### 4.5 Later
 
 - Battery in tray menu and notifications.
 - AVRCP media controls (play/pause/next/previous).
@@ -272,6 +293,7 @@ bconn/
 ├── cli.py               # argparse commands and output formatting
 ├── config.py            # config + state load/save, atomic writes
 ├── bluez.py             # object manager, proxies, models, error mapping
+├── obex.py              # OBEX Object Push client (session bus)
 ├── agent.py             # org.bluez.Agent1 implementation
 ├── transaction.py       # pair → trust → connect orchestration
 ├── daemon.py            # poll loop, backoff, systemd unit management
@@ -651,12 +673,16 @@ page remain.
 **Unit (`unittest`, stdlib):**
 
 - Error mapping table (`tests/test_errors.py`).
-- BlueZ model/parsing helpers (`tests/test_bluez.py`).
+- BlueZ model/parsing helpers, including Class-of-Device classification
+  (`tests/test_bluez.py`).
+- Scan-window filters and search (`tests/test_model.py`).
 - Config load/save, corruption recovery, atomic write (`tests/test_config.py`).
 - Name resolution (`tests/test_resolve.py`).
 - `wpctl` output parsing and MAC→sink matching (`tests/test_audio.py`).
-- Daemon backoff, unit rendering, and notification gating
-  (`tests/test_daemon.py`).
+- Daemon backoff, unit rendering, notification gating, and the discovery-owner
+  guard (`tests/test_daemon.py`).
+- OBEX session/file-send orchestration with mocked D-Bus
+  (`tests/test_obex.py`).
 - Shortcut rendering and install/uninstall (`tests/test_shortcut.py`).
 
 **Integration:**
@@ -667,7 +693,7 @@ page remain.
 - The fake is test-only and never touches the real Bluetooth stack.
 - No hardware, no root, and no real adapter are required.
 
-Current total: **73 tests**.
+Current total: **112 tests**.
 
 **Manual hardware matrix:**
 

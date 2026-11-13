@@ -226,16 +226,25 @@ class AutoConnectDaemon:
         by_address = {device.address: device for device in devices}
         missing = [address for address in opted_in if address not in by_address]
         if missing and (time.monotonic() - self._last_scan) >= SCAN_INTERVAL_SECONDS:
-            LOGGER.info("scanning for %d cached-but-absent device(s)", len(missing))
-            try:
-                devices = bluez.scan_devices(
-                    self.conn, adapter, self.scan_seconds
+            if adapter.discovering:
+                # Another client (the GUI, bluetoothctl, …) owns discovery.
+                # Starting a scan here would stop theirs when ours finishes.
+                LOGGER.debug(
+                    "discovery already active; skipping daemon scan"
                 )
-                by_address = {device.address: device for device in devices}
-            except BconnError as error:
-                LOGGER.info("scan failed: %s", error.title)
-            finally:
-                self._last_scan = time.monotonic()
+            else:
+                LOGGER.info(
+                    "scanning for %d cached-but-absent device(s)", len(missing)
+                )
+                try:
+                    devices = bluez.scan_devices(
+                        self.conn, adapter, self.scan_seconds
+                    )
+                    by_address = {device.address: device for device in devices}
+                except BconnError as error:
+                    LOGGER.info("scan failed: %s", error.title)
+                finally:
+                    self._last_scan = time.monotonic()
 
         for address in opted_in:
             device = by_address.get(address)

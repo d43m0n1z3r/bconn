@@ -303,6 +303,7 @@ PACKAGES=(
     gir1.2-notify-0.7
     gir1.2-ayatanaappindicator3-0.1
     bluez
+    bluez-obexd
     rfkill
     pipewire-bin
     wireplumber

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from bconn import daemon
+from bconn import bluez, daemon
 
 
 class BackoffTests(unittest.TestCase):
@@ -82,6 +82,47 @@ class DaemonSelectionTests(unittest.TestCase):
         )
         d.notify("hello", "body", "low")
         self.assertEqual(calls, [("hello", "body", "low")])
+
+
+class DiscoveryGuardTests(unittest.TestCase):
+    def make_daemon(self, discovering: bool):
+        d = daemon.AutoConnectDaemon(notifications=False)
+        d.config = mock.Mock()
+        d.config.data = {"auto_connect": True}
+        d.config.opted_in_devices.return_value = ["AA:BB:CC:DD:EE:FF"]
+        d._reload_config = lambda: None
+        d._maybe_connect = lambda *args: None
+        adapter = bluez.Adapter(
+            path="/org/bluez/hci0",
+            address="AA:BB:CC:11:22:33",
+            powered=True,
+            discovering=discovering,
+        )
+        return d, adapter
+
+    def run_cycle(self, d, adapter, scan):
+        with mock.patch.object(
+            daemon.bluez, "connect_system_bus", return_value=object()
+        ), mock.patch.object(
+            daemon.bluez, "get_objects", return_value=([adapter], [])
+        ), mock.patch.object(
+            daemon.bluez, "select_adapter", return_value=adapter
+        ), mock.patch.object(
+            daemon.bluez, "scan_devices", scan
+        ):
+            d._cycle()
+
+    def test_skips_scan_when_another_client_is_discovering(self):
+        d, adapter = self.make_daemon(discovering=True)
+        scan = mock.Mock()
+        self.run_cycle(d, adapter, scan)
+        scan.assert_not_called()
+
+    def test_scans_when_no_one_else_is_discovering(self):
+        d, adapter = self.make_daemon(discovering=False)
+        scan = mock.Mock(return_value=[])
+        self.run_cycle(d, adapter, scan)
+        scan.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -2,9 +2,11 @@ import unittest
 
 from bconn.errors import (
     BluezError,
+    ObexError,
     SystemNotReady,
     extract_remote_error,
     translate_glib,
+    translate_obex_glib,
 )
 
 
@@ -55,6 +57,33 @@ class ErrorTests(unittest.TestCase):
             FakeGlibError("GDBus.Error:org.example.Error.Weird: nope")
         )
         self.assertIsInstance(error, BluezError)
+        self.assertEqual(error.name, "org.example.Error.Weird")
+
+    def test_obex_missing_becomes_system_not_ready(self):
+        error = translate_obex_glib(
+            FakeGlibError(
+                "GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: "
+                "The name org.bluez.obex was not provided by any .service files"
+            )
+        )
+        self.assertIsInstance(error, SystemNotReady)
+        self.assertIn("obex", error.title.lower())
+        self.assertIn("systemctl --user start obex.service", error.hint or "")
+
+    def test_obex_friendly_error(self):
+        error = translate_obex_glib(
+            FakeGlibError(
+                "GDBus.Error:org.bluez.obex.Error.NotSupported: nope"
+            )
+        )
+        self.assertIsInstance(error, ObexError)
+        self.assertIn("does not support", error.title)
+
+    def test_obex_unknown_error_falls_back(self):
+        error = translate_obex_glib(
+            FakeGlibError("GDBus.Error:org.example.Error.Weird: nope")
+        )
+        self.assertIsInstance(error, ObexError)
         self.assertEqual(error.name, "org.example.Error.Weird")
 
 

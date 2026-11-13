@@ -160,6 +160,34 @@ _FRIENDLY: dict[str, tuple[str, str | None]] = {
 }
 
 
+_OBEX_FRIENDLY: dict[str, tuple[str, str | None]] = {
+    "org.bluez.obex.Error.InvalidArguments": (
+        "The device rejected the file transfer request.",
+        "The device may not support OBEX Object Push. Pair it first and retry.",
+    ),
+    "org.bluez.obex.Error.NotSupported": (
+        "The device does not support OBEX file transfer.",
+        "Try sending from the device to this computer instead.",
+    ),
+    "org.bluez.obex.Error.NotAuthorized": (
+        "The device rejected the transfer.",
+        "Pair the device and confirm the request on the device screen.",
+    ),
+    "org.bluez.obex.Error.InProgress": (
+        "Another OBEX transfer is already running.",
+        "Wait for it to finish and retry.",
+    ),
+    "org.bluez.obex.Error.Busy": (
+        "The device is busy.",
+        "Wait a moment and retry the transfer.",
+    ),
+    "org.bluez.obex.Error.Failed": (
+        "The file transfer failed.",
+        "Keep the device awake and close to the computer, then retry.",
+    ),
+}
+
+
 class BluezError(BconnError):
     """A failure reported by BlueZ over D-Bus."""
 
@@ -189,6 +217,50 @@ class BluezError(BconnError):
         if friendly:
             return friendly[1]
         return "Run 'bconn doctor' for a system check."
+
+
+class ObexError(BluezError):
+    """A failure reported by obexd over the session D-Bus."""
+
+    @property
+    def title(self) -> str:
+        friendly = _OBEX_FRIENDLY.get(self.name)
+        if friendly:
+            return friendly[0]
+        return super().title
+
+    @property
+    def hint(self) -> str | None:
+        friendly = _OBEX_FRIENDLY.get(self.name)
+        if friendly:
+            return friendly[1]
+        return super().hint
+
+
+def _is_obex_missing(name: str, message: str) -> bool:
+    lowered = (message or "").lower()
+    return (
+        name
+        in {
+            "org.freedesktop.DBus.Error.ServiceUnknown",
+            "org.freedesktop.DBus.Error.NameHasNoOwner",
+            "org.freedesktop.DBus.Error.Spawn.ExecFailed",
+            "org.freedesktop.DBus.Error.Spawn.Failed",
+        }
+        or "org.bluez.obex" in lowered
+        and "not provided by any .service files" in lowered
+    )
+
+
+def translate_obex_glib(error: object, operation: str | None = None) -> BconnError:
+    """Convert a session-bus GLib.Error into a friendly BConn error."""
+    parsed = ObexError.from_glib(error, operation)
+    if _is_obex_missing(parsed.name, parsed.detail):
+        return SystemNotReady(
+            "The OBEX file-transfer service (obexd) is not running.",
+            "Start it with: systemctl --user start obex.service",
+        )
+    return parsed
 
 
 def translate_glib(error: object, operation: str | None = None) -> BconnError:

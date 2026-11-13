@@ -24,7 +24,7 @@ cd bconn
 sudo apt install -y \
   python3-gi python3-cairo gir1.2-gtk-3.0 \
   gir1.2-notify-0.7 gir1.2-ayatanaappindicator3-0.1 \
-  bluez rfkill pipewire-bin wireplumber \
+  bluez rfkill bluez-obexd pipewire-bin wireplumber \
   dbus desktop-file-utils
 
 # Run the tools straight from the checkout
@@ -69,6 +69,7 @@ bt/
 │   ├── cli.py              # argparse commands + output formatting
 │   ├── config.py           # Config/State JSON stores (atomic writes)
 │   ├── bluez.py            # D-Bus client, Adapter/Device models, scanning
+│   ├── obex.py             # OBEX Object Push client (session bus)
 │   ├── agent.py            # org.bluez.Agent1 pairing agent
 │   ├── transaction.py      # pair -> trust -> connect / disconnect / forget
 │   ├── audio.py            # PipeWire sink discovery + default routing
@@ -99,8 +100,8 @@ bt/
 ```
 
 Design rule: **the core does not import GTK.** `bconn/bluez.py`,
-`transaction.py`, `audio.py`, `config.py`, and `daemon.py` are usable from a
-terminal or a service. Only `bconn/ui/*` imports GTK.
+`transaction.py`, `obex.py`, `audio.py`, `config.py`, and `daemon.py` are usable
+from a terminal or a service. Only `bconn/ui/*` imports GTK.
 
 ---
 
@@ -143,7 +144,9 @@ python3 -m unittest discover -s tests -v
 ```
 
 The suite covers error translation, config/state, name resolution, audio
-parsing, daemon backoff/unit rendering, and shortcut generation.
+parsing, Class-of-Device classification, scan filters, daemon
+backoff/unit rendering/discovery guard, OBEX orchestration with a mocked
+session bus, and shortcut generation.
 
 ### Fake BlueZ integration tests
 

@@ -83,7 +83,7 @@ Behavior:
 ┌──────────────────────────────────────────────────────────────┐
 │  Bluetooth                                      [Scanning ●] │
 │                                                              │
-│  [ All ] [ Audio ] [ Input ] [ Phone ]          🔍 Search     │
+│  [ All ] [ Audio ] [ Input ] [ Phone ] [ Other ]  🔍 Search  │
 ├──────────────────────────────────────────────────────────────┤
 │  🎧  SoundCore Mini        ▂▄▆█   Paired      [ Connect ]    │
 │  🎧  WH-1000XM4            ▂▄▆_   Connected   [Disconnect]   │
@@ -108,7 +108,8 @@ Behavior:
 - **Status chip:** `Connected`, `Paired`, `Trusted`, `New`, `Blocked`.
 - **Action:** one button; `Connect` → `Connecting…` (spinner) → `Disconnect`.
 - **Secondary actions:** right-click a row (or activate its menu button):
-  Details, Auto-connect toggle, Set alias, Forget.
+  Details, Auto-connect toggle, Set alias, Send file… (when the device supports
+  OBEX), Forget.
 - **Sorting:** connected first, then paired/favorites, then RSSI descending.
 - **Filter tabs** apply immediately; the selection persists for the session and
   **All** is the default.
