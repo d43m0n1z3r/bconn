@@ -36,6 +36,23 @@ class DesktopEntryTests(unittest.TestCase):
         self.assertIn('stroke="#ffffff"', shortcut.ICON_SVG)
         self.assertNotIn("href", shortcut.ICON_SVG)
 
+    def test_bare_name_is_not_quoted(self):
+        text = shortcut.render_desktop("bconn-gui")
+        self.assertIn("Exec=bconn-gui --window", text)
+
+
+class LauncherPathTests(unittest.TestCase):
+    def test_prefers_installed_console_script(self):
+        with mock.patch.object(
+            shortcut.shutil, "which", return_value="/home/me/.local/bin/bconn-gui"
+        ):
+            self.assertEqual(shortcut.launcher_path(), "bconn-gui")
+
+    def test_falls_back_to_checkout_launcher(self):
+        with mock.patch.object(shortcut.shutil, "which", return_value=None):
+            expected = str(shortcut.project_root() / "bin" / "bconn-gui")
+            self.assertEqual(shortcut.launcher_path(), expected)
+
 
 class InstallTests(unittest.TestCase):
     def test_install_and_uninstall_honour_xdg_data_home(self):

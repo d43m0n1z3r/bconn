@@ -1,9 +1,11 @@
 """Application-menu shortcut (``.desktop``) installation.
 
-The GUI is launched through ``bin/bconn-gui`` from a checkout, or through the
-``bconn-gui`` console script when installed. Both end up as an absolute
-``Exec=`` line in ``~/.local/share/applications/bconn.desktop`` so the shortcut
-works regardless of the user's ``PATH``.
+When BConn is installed, the shortcut launches the ``bconn-gui`` console script
+by name, so ``Exec=`` resolves through ``PATH`` and keeps working if the
+checkout moves. From an uninstalled checkout it falls back to an absolute path
+to ``bin/bconn-gui``.
+
+The entry is written to ``~/.local/share/applications/bconn.desktop``.
 
 No GTK import is needed here: the icon is a self-contained SVG, so the shortcut
 can be installed from a plain SSH session as well.
@@ -42,11 +44,18 @@ def project_root() -> Path:
 
 
 def launcher_path() -> str:
-    """Absolute path to the GUI launcher, or ``bconn-gui`` as a last resort."""
+    """Executable to launch the GUI, preferring the installed console script.
+
+    A bare ``bconn-gui`` is resolved through ``PATH`` by the desktop
+    environment, so the shortcut survives moving or renaming the checkout.
+    Only an uninstalled checkout pins an absolute path.
+    """
+    if shutil.which("bconn-gui"):
+        return "bconn-gui"
     candidate = project_root() / "bin" / "bconn-gui"
     if candidate.exists():
         return str(candidate)
-    return shutil.which("bconn-gui") or "bconn-gui"
+    return "bconn-gui"
 
 
 def data_home() -> Path:
@@ -148,7 +157,7 @@ def status_text() -> str:
         f"Icon       {'installed' if icon.exists() else 'not installed'}  {icon}",
     ]
     if desktop.exists():
-        lines.append(f"Launcher   {launcher_path()}")
+        lines.append(f"Launcher   {shutil.which('bconn-gui') or launcher_path()}")
         lines.append("Open it from the application menu (search for BConn).")
     else:
         lines.append("Install it with: bconn shortcut install")

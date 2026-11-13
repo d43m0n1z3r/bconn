@@ -127,14 +127,23 @@ cd bconn
 ./bin/bconn-gui --window
 ```
 
-There is no build step and no virtualenv: BConn uses the system Python and the
-distribution's PyGObject bindings. To use the commands without the `bin/`
-prefix, add the checkout to your `PATH`:
+There is no build step: BConn uses the system Python and the distribution's
+PyGObject bindings. To use the commands without the `bin/` prefix, add the
+checkout to your `PATH`:
 
 ```bash
 echo 'export PATH="$PWD/bin:$PATH"' >> ~/.zshrc   # use ~/.bashrc for Bash
 source ~/.zshrc
 ```
+
+Or install the checkout with pipx so the commands live in `~/.local/bin`:
+
+```bash
+pipx install --editable --system-site-packages .
+```
+
+`--system-site-packages` is required so the app can import the system PyGObject
+(`gi`). Editable mode means edits in the checkout apply immediately.
 
 Full details, per-distro package names, upgrades, and manual uninstall steps
 live in [`docs/INSTALL.md`](docs/INSTALL.md).

@@ -27,13 +27,28 @@ class BackoffTests(unittest.TestCase):
         self.assertEqual(daemon.backoff_delay(50), 300.0)
 
 
+class DaemonExecutableTests(unittest.TestCase):
+    def test_prefers_installed_console_script(self):
+        with mock.patch.object(
+            daemon.shutil, "which", return_value="/home/me/.local/bin/bconn-daemon"
+        ):
+            self.assertEqual(
+                daemon.daemon_executable(), "/home/me/.local/bin/bconn-daemon"
+            )
+
+    def test_falls_back_to_checkout_launcher(self):
+        with mock.patch.object(daemon.shutil, "which", return_value=None):
+            expected = str(daemon.project_root() / "bin" / "bconn-daemon")
+            self.assertEqual(daemon.daemon_executable(), expected)
+
+
 class UnitFileTests(unittest.TestCase):
     def test_render_unit_points_at_launcher(self):
         text = daemon.render_unit(poll_seconds=45)
         self.assertIn("[Service]", text)
         self.assertIn("[Install]", text)
         self.assertIn("ExecStart=", text)
-        self.assertIn("bin/bconn-daemon", text)
+        self.assertIn("bconn-daemon", text)
         self.assertIn("Environment=BCONN_POLL_SECONDS=45", text)
         self.assertIn("WantedBy=default.target", text)
         self.assertIn("Restart=on-failure", text)

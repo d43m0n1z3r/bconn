@@ -212,8 +212,8 @@ Bluetooth looks ready.
 ## 6. Manual installation from a checkout (developers)
 
 Use this when you are working on BConn and do not want a system-wide install.
-There is no build step and no virtualenv: BConn runs with the system Python and
-the distribution's PyGObject.
+There is no build step: BConn runs with the system Python and the
+distribution's PyGObject.
 
 ```bash
 # Dependencies from section 2, if you have not installed them already.
@@ -226,6 +226,18 @@ cd ~/.local/opt/bconn
 ./bin/bconn --version
 ./bin/bconn doctor
 ```
+
+### Optional: install the checkout with pipx
+
+To put `bconn`, `bconn-gui`, and `bconn-daemon` on `PATH` without editing your
+shell profile, install the checkout as an editable pipx app:
+
+```bash
+pipx install --editable --system-site-packages ~/.local/opt/bconn
+```
+
+`--system-site-packages` lets the app import the distribution's PyGObject
+(`gi`). Editable mode means edits in the checkout take effect immediately.
 
 ### Add the checkout commands to `PATH`
 
@@ -262,7 +274,9 @@ Files created:
 - `~/.local/share/icons/hicolor/scalable/apps/bconn.svg`
 
 Search for **BConn** in the application menu. The shortcut runs
-`bconn-gui --window`, using an absolute `Exec=` path. Clicking it while the tray
+`bconn-gui --window`. When `bconn-gui` is on `PATH` (a pipx or system install),
+`Exec=` uses the bare name so the shortcut survives moving the checkout; an
+uninstalled checkout falls back to an absolute path. Clicking it while the tray
 is already running raises the existing window instead of starting a second copy.
 
 ---
@@ -281,8 +295,9 @@ bconn daemon status
 ```
 
 The generated unit lives at
-`~/.config/systemd/user/bconn-daemon.service`. It uses an absolute `ExecStart`
-and, when run from a checkout, an explicit `PYTHONPATH`.
+`~/.config/systemd/user/bconn-daemon.service`. It uses an absolute `ExecStart`,
+preferring the installed `bconn-daemon` and falling back to the checkout
+launcher, with an explicit `PYTHONPATH` only in the checkout case.
 
 Useful commands:
 

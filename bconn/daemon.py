@@ -384,11 +384,18 @@ def project_root() -> Path:
 
 
 def daemon_executable() -> str:
+    """Absolute executable for the unit, preferring the installed console script.
+
+    systemd requires an absolute path, so a bare name is only a last resort.
+    Preferring the installed script keeps the unit valid when the checkout moves.
+    """
+    found = shutil.which("bconn-daemon")
+    if found:
+        return found
     candidate = project_root() / "bin" / "bconn-daemon"
     if candidate.exists():
         return str(candidate)
-    found = shutil.which("bconn-daemon")
-    return found or "bconn-daemon"
+    return "bconn-daemon"
 
 
 def unit_path() -> Path:
