@@ -75,7 +75,8 @@ class FakeStackTests(unittest.TestCase):
         self.temp.cleanup()
 
     def _wait_for_fake(self):
-        deadline = time.monotonic() + 5
+        # CI runners can be slow to start the private bus and fake service.
+        deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             if self.stderr_path.exists() and "ready" in self.stderr_path.read_text():
                 return

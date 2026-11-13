@@ -24,7 +24,7 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
-from . import audio, bluez, transaction  # noqa: E402
+from . import __version__, audio, bluez, transaction  # noqa: E402
 from .config import Config, State  # noqa: E402
 from .errors import BconnError  # noqa: E402
 
@@ -541,7 +541,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-audio", action="store_true", help="do not route audio")
     parser.add_argument("--no-notify", action="store_true", help="do not show notifications")
     parser.add_argument("--verbose", action="store_true", help="debug logging")
-    parser.add_argument("--version", action="version", version="bconn-daemon 0.1.0")
+    parser.add_argument(
+        "--version", action="version", version=f"bconn-daemon {__version__}"
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
