@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+#
+# bconn-doctor — read-only Bluetooth readiness check for BConn.
+#
+# Usage: ./bin/bconn-doctor [--no-color]
+# Exit:  0 = healthy, 1 = blocking problem, 2 = warnings only
+
+set -u
+
+USE_COLOR=1
+[[ "${1:-}" == "--no-color" ]] && USE_COLOR=0
+[[ -t 1 ]] || USE_COLOR=0
+
+if [[ $USE_COLOR -eq 1 ]]; then
+    B=$'\e[1m'; DIM=$'\e[2m'; R=$'\e[0m'
+    G=$'\e[32m'; Y=$'\e[33m'; RD=$'\e[31m'; C=$'\e[36m'
+else
+    B=''; DIM=''; R=''; G=''; Y=''; RD=''; C=''
+fi
+
+PASS=0; WARN=0; FAIL=0; FAILED_ITEMS=()
+
+pass()  { printf '  %s✓%s %s\n' "$G" "$R" "$1"; PASS=$((PASS + 1)); }
+warn()  { printf '  %s!%s %s\n' "$Y" "$R" "$1"; WARN=$((WARN + 1)); }
+fail()  { printf '  %s✕%s %s\n' "$RD" "$R" "$1"; FAIL=$((FAIL + 1)); FAILED_ITEMS+=("$1"); }
+detail(){ printf '      %s%s%s\n' "$DIM" "$1" "$R"; }
+
+section() { printf '\n%s%s%s\n' "$B" "$1" "$R"; }
+
+printf '%sBConn Bluetooth doctor%s\n' "$B" "$R"
+printf '%sRead-only. Nothing is changed.%s\n' "$DIM" "$R"
+
+# ---------------------------------------------------------------- environment
+section "Environment"
+
+if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    printf '  %-14s %s\n' "OS" "${PRETTY_NAME:-unknown}"
+fi
+printf '  %-14s %s\n' "Kernel" "$(uname -r)"
+printf '  %-14s %s\n' "Session" "${XDG_SESSION_TYPE:-unknown} / ${XDG_CURRENT_DESKTOP:-unknown}"
+
+if command -v bluetoothctl >/dev/null 2>&1; then
+    printf '  %-14s %s\n' "BlueZ" "$(bluetoothctl --version 2>/dev/null | head -n1)"
+else
+    fail "bluetoothctl not found — install the bluez package"
+fi
+
+# -------------------------------------------------------------------- systemd
+section "Bluetooth service"
+
+svc_active=$(systemctl is-active bluetooth 2>/dev/null || true)
+svc_enabled=$(systemctl is-enabled bluetooth 2>/dev/null || true)
+dbus_alias=$(systemctl is-enabled dbus-org.bluez.service 2>/dev/null || true)
+
+if [[ "$svc_active" == "active" ]]; then
+    pass "bluetooth.service is running"
+else
+    fail "bluetooth.service is not running (state: ${svc_active:-unknown})"
+    detail "Fix: sudo systemctl enable --now bluetooth"
+fi
+
+if [[ "$svc_enabled" == "enabled" || "$svc_enabled" == "enabled-runtime" ]]; then
+    pass "bluetooth.service is enabled at boot"
+else
+    if [[ "$svc_active" == "active" ]]; then
+        warn "bluetooth.service is running but not enabled at boot (state: ${svc_enabled:-unknown})"
+        detail "Fix: sudo systemctl enable bluetooth"
+    else
+        detail "It is also disabled at boot, so Bluetooth will be gone after reboot."
+    fi
+fi
+
+if [[ "$dbus_alias" == "alias" || "$dbus_alias" == "enabled" || "$dbus_alias" == "enabled-runtime" ]]; then
+    pass "D-Bus activation alias dbus-org.bluez.service exists"
+else
+    fail "D-Bus activation alias dbus-org.bluez.service is missing"
+    detail "This is why bluetoothctl can hang instead of reporting an error."
+    detail "Fix: sudo systemctl enable --now bluetooth"
+fi
+
+# ---------------------------------------------------------------------- rfkill
+section "Radio"
+
+if ! command -v rfkill >/dev/null 2>&1; then
+    warn "rfkill not found — cannot verify radio blocking"
+else
+    rfkill_out=$(rfkill list bluetooth 2>/dev/null || true)
+    if [[ -z "$rfkill_out" ]]; then
+        warn "No Bluetooth radio is exposed by rfkill"
+        detail "If this is a VM, pass the USB Bluetooth adapter through to the guest."
+    else
+        soft=$(awk -F': ' '/Soft blocked/{print $2; exit}' <<<"$rfkill_out")
+        hard=$(awk -F': ' '/Hard blocked/{print $2; exit}' <<<"$rfkill_out")
+        if [[ "$soft" == "yes" ]]; then
+            fail "Bluetooth radio is soft-blocked"
+            detail "Fix: rfkill unblock bluetooth"
+        elif [[ "$hard" == "yes" ]]; then
+            fail "Bluetooth radio is hard-blocked (hardware switch/firmware)"
+            detail "Toggle the laptop's wireless switch or check the BIOS."
+        else
+            pass "Bluetooth radio is not blocked"
+        fi
+    fi
+fi
+
+if lsmod 2>/dev/null | grep -q '^bluetooth '; then
+    pass "Kernel Bluetooth module is loaded"
+else
+    fail "Kernel Bluetooth module is not loaded"
+    detail "Check: dmesg | grep -i bluetooth"
+fi
+
+# ------------------------------------------------------------------ controller
+section "Controller"
+
+if [[ "$svc_active" != "active" ]]; then
+    warn "Skipping controller check because bluetoothd is not running"
+else
+    ctl_out=$(timeout 8 bluetoothctl show 2>&1)
+    ctl_rc=$?
+    if [[ $ctl_rc -eq 124 ]]; then
+        fail "bluetoothctl did not respond within 8s"
+        detail "The daemon is running but the control interface is stuck."
+        detail "Try: sudo systemctl restart bluetooth"
+    elif grep -q '^Controller ' <<<"$ctl_out"; then
+        ctl_name=$(awk '/^Controller /{print $2; exit}' <<<"$ctl_out")
+        pass "Adapter found: $ctl_name"
+
+        powered=$(awk -F': ' '/Powered:/{print $2; exit}' <<<"$ctl_out")
+        if [[ "$powered" == "yes" ]]; then
+            pass "Adapter is powered on"
+        else
+            warn "Adapter is powered off"
+            detail "Fix: bluetoothctl power on (BConn also does this automatically)."
+        fi
+
+        discovering=$(awk -F': ' '/Discovering:/{print $2; exit}' <<<"$ctl_out")
+        if [[ "$discovering" == "yes" ]]; then
+            warn "Adapter is currently discovering (scanning can break connections)"
+        fi
+    elif grep -qi 'no default controller\|no controller' <<<"$ctl_out"; then
+        fail "No Bluetooth controller available"
+        detail "Check USB passthrough (VM), firmware, or dmesg | grep -i blue"
+    else
+        fail "Could not read controller information"
+        detail "Output: $(tr '\n' ' ' <<<"$ctl_out" | cut -c1-160)"
+    fi
+fi
+
+# ------------------------------------------------------------------ audio
+section "Audio stack"
+
+if systemctl --user is-active --quiet pipewire 2>/dev/null; then
+    pass "PipeWire is running"
+else
+    fail "PipeWire user service is not running"
+    detail "Fix: systemctl --user enable --now pipewire"
+fi
+
+if systemctl --user is-active --quiet wireplumber 2>/dev/null; then
+    pass "WirePlumber is running"
+else
+    fail "WirePlumber user service is not running"
+    detail "Fix: systemctl --user enable --now wireplumber"
+fi
+
+if systemctl --user is-active --quiet pipewire-pulse 2>/dev/null; then
+    pass "pipewire-pulse is running"
+else
+    warn "pipewire-pulse is not running (PulseAudio compatibility layer)"
+fi
+
+if command -v wpctl >/dev/null 2>&1; then
+    bus_sinks=$(wpctl status 2>/dev/null | grep -ci 'bluez' || true)
+    if [[ "${bus_sinks:-0}" -gt 0 ]]; then
+        pass "BlueZ audio nodes are visible to PipeWire"
+    else
+        warn "No BlueZ audio nodes currently visible (normal when nothing is connected)"
+    fi
+    if ! command -v pactl >/dev/null 2>&1; then
+        detail "pactl is absent; BConn will use wpctl for routing."
+    fi
+else
+    fail "wpctl not found — install pipewire-bin"
+fi
+
+# --------------------------------------------------------------- dependencies
+section "Python / GUI dependencies"
+
+pycheck() {
+    local label=$1 code=$2
+    if python3 -c "$code" >/dev/null 2>&1; then
+        pass "$label"
+    else
+        fail "$label"
+    fi
+}
+
+pycheck "Python 3 + PyGObject (gi)" "import gi"
+pycheck "GTK 3 bindings" "import gi; gi.require_version('Gtk','3.0'); from gi.repository import Gtk"
+pycheck "Gio bindings (D-Bus)" "import gi; from gi.repository import Gio"
+pycheck "Ayatana AppIndicator (tray)" "import gi; gi.require_version('AyatanaAppIndicator3','0.1'); from gi.repository import AyatanaAppIndicator3"
+pycheck "libnotify (notifications)" "import gi; gi.require_version('Notify','0.7'); from gi.repository import Notify"
+
+if python3 -c "import gi; gi.require_version('Gtk','4.0'); from gi.repository import Gtk" >/dev/null 2>&1; then
+    detail "GTK 4 Python bindings are available (BConn targets GTK 3 for now)."
+fi
+
+# ---------------------------------------------------------- desktop integration
+section "Desktop integration"
+
+if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx bluetooth; then
+    pass "User is in the bluetooth group"
+else
+    warn "User is not in the bluetooth group"
+    detail "Fix: sudo usermod -aG bluetooth $USER  (then log out and back in)"
+fi
+
+if busctl --user list 2>/dev/null | grep -qE 'org\.(kde|freedesktop)\.StatusNotifierWatcher'; then
+    pass "A system tray (StatusNotifier) host is available"
+else
+    warn "No StatusNotifier host detected"
+    detail "BConn will fall back to Gtk.StatusIcon or a normal window."
+fi
+
+if busctl --user list 2>/dev/null | grep -q 'org.freedesktop.Notifications'; then
+    pass "A notification daemon is running"
+else
+    warn "No notification daemon detected (xfce4-notifyd / dunst)"
+fi
+
+config_base="${XDG_CONFIG_HOME:-$HOME/.config}"
+if [[ -d "$config_base" && -w "$config_base" ]]; then
+    pass "Config directory is writable ($config_base)"
+else
+    fail "Config directory is not writable ($config_base)"
+fi
+
+# --------------------------------------------------------------- permissions
+section "Permissions"
+
+if [[ "$EUID" -eq 0 ]]; then
+    warn "Running as root — BConn is designed to run as a normal user"
+else
+    pass "Running as a normal user (no root needed at runtime)"
+fi
+
+# --------------------------------------------------------------------- summary
+printf '\n%sSummary%s  %s%d passed%s · %s%d warnings%s · %s%d failed%s\n' \
+    "$B" "$R" "$G" "$PASS" "$R" "$Y" "$WARN" "$R" "$RD" "$FAIL" "$R"
+
+if [[ $FAIL -gt 0 ]]; then
+    printf '\n%sBlocking issues:%s\n' "$RD" "$R"
+    for item in "${FAILED_ITEMS[@]}"; do
+        printf '  • %s\n' "$item"
+    done
+    printf '\nMost common fix on Kali:\n  sudo systemctl enable --now bluetooth\n'
+    exit 1
+elif [[ $WARN -gt 0 ]]; then
+    printf '\nNo blocking issues, but review the warnings above.\n'
+    exit 2
+else
+    printf '\nBluetooth looks ready.\n'
+    exit 0
+fi

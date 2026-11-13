@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bconn"
+version = "0.1.0"
+description = "Fast, reliable Bluetooth connections from the Linux command line"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "d43m0n1z3r" }]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/d43m0n1z3r/bconn"
+Repository = "https://github.com/d43m0n1z3r/bconn"
+Issues = "https://github.com/d43m0n1z3r/bconn/issues"
+
+[project.scripts]
+bconn = "bconn.cli:main"
+bconn-gui = "bconn.ui:main"
+bconn-daemon = "bconn.daemon:main"
+
+[tool.setuptools.packages.find]
+include = ["bconn*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
