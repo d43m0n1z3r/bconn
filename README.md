@@ -289,6 +289,7 @@ the release checklist live in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 | [`docs/PLAN.md`](docs/PLAN.md) | Product and technical design, reliability model, BlueZ integration, milestones |
 | [`docs/UX.md`](docs/UX.md) | Tray states, menus, scan window, interaction flows |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution guidelines and bug-report checklist |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history and notable changes |
 | [`docs/PUBLISHING.md`](docs/PUBLISHING.md) | Maintainer checklist for GitHub publishing and releases |
 
 ## Status and roadmap

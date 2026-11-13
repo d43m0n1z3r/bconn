@@ -35,11 +35,21 @@ If you ever switch licenses, update all three together.
 
 ### Check the version
 
-`bconn/__init__.py` and `pyproject.toml` should agree:
+`bconn/__init__.py` is the single source of truth. `pyproject.toml` declares
+`dynamic = ["version"]` and reads the value with:
+
+```toml
+[tool.setuptools.dynamic]
+version = { attr = "bconn.__version__" }
+```
+
+Verify the value and that packaging sees it:
 
 ```bash
 grep -n "__version__" bconn/__init__.py
-grep -n "^version" pyproject.toml
+python3 -c "import bconn; print(bconn.__version__)"
+python3 -m build --sdist --wheel
+ls dist/
 ```
 
 ### Run the checks
@@ -123,33 +133,60 @@ sudo ./install.sh --uninstall
 
 ---
 
-## 5. First release
+## 5. Release versioning
 
-```bash
-git tag -a v0.1.0 -m "BConn 0.1.0"
-git push origin v0.1.0
-```
+BConn uses [Semantic Versioning](https://semver.org/) and tags releases as
+`vMAJOR.MINOR.PATCH`. The version lives only in `bconn/__init__.py`; the tag
+must match it exactly, or the release workflow fails.
 
-Create a GitHub release from the tag. Suggested notes:
+The workflows in `.github/workflows/` are:
 
-```markdown
-First public release.
+- `ci.yml` — runs the test suite on pushes to `main`, pull requests, and when
+  called by the release workflow.
+- `release.yml` — runs on tags matching `v*`, checks that the tag matches
+  `bconn.__version__`, builds the sdist and wheel, and publishes a GitHub
+  Release with generated notes and the built files attached.
 
-- CLI: list, scan, pair, connect, disconnect, forget, power, audio, auto,
-  info, doctor.
-- GTK 3 tray app with scan window, pairing dialogs, preferences, details,
-  notifications, and PipeWire audio routing.
-- Opt-in per-device auto-reconnect via a systemd --user daemon.
-- Application-menu shortcut and bundled icon.
-- 73 unit/integration tests against a fake BlueZ service.
+Both use standard GitHub-hosted runners. For a public repository, Actions
+minutes, Releases, and release assets are free.
 
-Known limitations:
-- Installation is one command (`sudo ./install.sh`); `.deb` packaging is not
-  ready yet. `pipx install --system-site-packages` also works.
-- Focused on Kali/XFCE and BlueZ 5.x; other desktops should work but are
-  not verified.
-- Auto-connect is opt-in and does not override a manual disconnect.
-```
+### Cut a release
+
+1. Pick the next version and update the single source:
+
+   ```bash
+   cd /home/daemonizer/Documents/Project/v1/bconn
+   # edit bconn/__init__.py, for example: __version__ = "0.2.0"
+   ```
+
+2. Add the matching section to `CHANGELOG.md` and move anything from
+   `[Unreleased]` into it. Update the comparison links at the bottom.
+
+3. Run the checks from
+   [`docs/DEVELOPMENT.md`](DEVELOPMENT.md#8-release-checklist) and commit:
+
+   ```bash
+   python3 -m unittest discover -s tests -v
+   python3 -m pytest -q
+   git add -A
+   git commit -m "release: BConn 0.2.0"
+   git push origin main
+   ```
+
+4. Tag and push the tag. This is what starts the release workflow:
+
+   ```bash
+   git tag -a v0.2.0 -m "BConn 0.2.0"
+   git push origin v0.2.0
+   ```
+
+5. Watch the **Actions** tab. When the workflow finishes, the release is on the
+   **Releases** page with generated notes and `bconn-0.2.0.tar.gz` /
+   `bconn-0.2.0-py3-none-any.whl` attached.
+
+To publish without Actions (or to fix a failed run), open
+**GitHub → Releases → Draft a new release**, select the existing tag, and
+publish. Never move or reuse a published tag; bump the version instead.
 
 ---
 

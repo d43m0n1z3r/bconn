@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (Python 3, system PyGObject)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi \
+            gir1.2-gtk-3.0 \
+            gir1.2-notify-0.7 \
+            gir1.2-ayatanaappindicator3-0.1 \
+            dbus
+
+      - name: Show versions
+        run: |
+          python3 --version
+          python3 -c "import gi; print('PyGObject', gi.__version__)"
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v

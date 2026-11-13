@@ -283,8 +283,11 @@ bconn daemon logs -n 100
 
 ## 8. Release checklist
 
-1. Update `__version__` in `bconn/__init__.py` and `version` in `pyproject.toml`.
-2. Run `python3 -m unittest discover -s tests -v` — all tests must pass.
+1. Update `__version__` in `bconn/__init__.py`. This is the single source of
+   truth: `pyproject.toml` reads it through `[tool.setuptools.dynamic]`.
+   Add the matching section to `CHANGELOG.md` and update its comparison links.
+2. Run `python3 -m unittest discover -s tests -v` and `python3 -m pytest -q` —
+   all tests must pass.
 3. Run `./bin/bconn doctor` and `./bin/bconn daemon once --no-audio --no-notify`.
 4. Smoke-test the installed flow from a clean checkout:
 
@@ -299,6 +302,21 @@ bconn daemon logs -n 100
 6. Update `README.md`, `docs/INSTALL.md`, and `docs/PLAN.md` status if behavior
    changed.
 7. Check that the config and state paths still match the documentation.
-8. Tag the release and attach notes. `.deb` packaging is still future work; the
-   supported installs are `sudo ./install.sh` and
-   `pipx install --system-site-packages`.
+8. Commit, then tag and push. The tag must be `v` plus the exact
+   `bconn.__version__` value:
+
+   ```bash
+   git add -A
+   git commit -m "release: BConn 0.2.0"
+   git push origin main
+   git tag -a v0.2.0 -m "BConn 0.2.0"
+   git push origin v0.2.0
+   ```
+
+   The `Release` workflow runs the tests, verifies the tag, builds the sdist
+   and wheel, and publishes the GitHub Release with generated notes. See
+   [`docs/PUBLISHING.md`](PUBLISHING.md#5-release-versioning) for the full
+   process.
+
+   `.deb` packaging is still future work; the supported installs are
+   `sudo ./install.sh` and `pipx install --system-site-packages`.
