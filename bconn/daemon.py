@@ -102,7 +102,10 @@ class AutoConnectDaemon:
         self.conn: Gio.DBusConnection | None = None
         self._attempts: dict[str, Attempt] = {}
         self._unpaired_notified: set[str] = set()
-        self._last_scan = 0.0
+        # Allow the first pass to scan immediately. Using 0.0 would delay the
+        # first scan until the host's monotonic clock passed the scan interval,
+        # which matters right after boot.
+        self._last_scan = -SCAN_INTERVAL_SECONDS
         self._last_opt_in: tuple[str, ...] | None = None
         self._loop: GLib.MainLoop | None = None
         self._source_id = 0

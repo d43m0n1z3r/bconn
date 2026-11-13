@@ -693,7 +693,7 @@ page remain.
 - The fake is test-only and never touches the real Bluetooth stack.
 - No hardware, no root, and no real adapter are required.
 
-Current total: **112 tests**.
+Current total: **113 tests**.
 
 **Manual hardware matrix:**
 

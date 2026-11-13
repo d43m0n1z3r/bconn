@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -92,6 +93,9 @@ class DiscoveryGuardTests(unittest.TestCase):
         d.config.opted_in_devices.return_value = ["AA:BB:CC:DD:EE:FF"]
         d._reload_config = lambda: None
         d._maybe_connect = lambda *args: None
+        # Do not depend on the host's uptime: force the scan interval to have
+        # elapsed even on a freshly booted CI runner.
+        d._last_scan = time.monotonic() - daemon.SCAN_INTERVAL_SECONDS - 1
         adapter = bluez.Adapter(
             path="/org/bluez/hci0",
             address="AA:BB:CC:11:22:33",
@@ -111,6 +115,10 @@ class DiscoveryGuardTests(unittest.TestCase):
             daemon.bluez, "scan_devices", scan
         ):
             d._cycle()
+
+    def test_first_scan_is_not_delayed_after_boot(self):
+        d = daemon.AutoConnectDaemon(notifications=False)
+        self.assertLessEqual(d._last_scan, -daemon.SCAN_INTERVAL_SECONDS)
 
     def test_skips_scan_when_another_client_is_discovering(self):
         d, adapter = self.make_daemon(discovering=True)

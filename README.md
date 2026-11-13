@@ -305,7 +305,7 @@ Implemented and verified on real hardware:
   with Audio/Input/Phone/Other filters (verified on real hardware).
 - OBEX Object Push file sending from the CLI and tray (mocked-D-Bus tests plus
   a hardware smoke test against `obexd`).
-- **112** unit and fake-BlueZ end-to-end tests.
+- **113** unit and fake-BlueZ end-to-end tests.
 
 Planned:
 
