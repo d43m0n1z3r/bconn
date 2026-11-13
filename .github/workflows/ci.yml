@@ -39,4 +39,17 @@ jobs:
           python3 -c "import gi; print('PyGObject', gi.__version__)"
 
       - name: Run tests
-        run: python3 -m unittest discover -s tests -v
+        shell: bash
+        run: |
+          set +e
+          python3 -m unittest discover -s tests -v 2>&1 | tee test-output.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Surface the tail of the failure as a public check annotation so
+            # the failing test is visible without downloading logs.
+            message=$(tail -n 80 test-output.log \
+              | sed -e 's/%/%25/g' -e 's/\r/%0D/g' \
+              | awk '{printf "%s%%0A", $0}')
+            echo "::error title=Test failure::${message}"
+            exit "$status"
+          fi
